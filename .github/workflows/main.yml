@@ -1,0 +1,36 @@
+import yfinance as yf
+import pandas as pd
+import datetime
+
+# URL CSV dari Google Sheets hang
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1aoNh8FUQTmkFshV5qlmrUi2EeUNvla7pYROK_Wb6MgI/export?format=csv&gid=0"
+
+def fetch_and_save():
+    try:
+        # 1. Baca list dari Google Sheets
+        df_list = pd.read_csv(SHEET_URL)
+        # Ambil column TICKER (huruf besar ikut Sheets hang)
+        tickers = df_list['TICKER'].dropna().unique().tolist()
+        
+        print(f"Memulakan tarikan data untuk {len(tickers)} kaunter...")
+
+        # 2. Tarik data batch
+        data = yf.download(
+            tickers=tickers,
+            period="1d",
+            interval="15m",
+            group_by='ticker',
+            threads=True,
+            progress=False
+        )
+
+        if not data.empty:
+            # Simpan fail csv dalam repo
+            data.to_csv("bursa_live_data.csv")
+            print(f"Berjaya update pada: {datetime.datetime.now()}")
+            
+    except Exception as e:
+        print(f"Error: {e}")
+
+if __name__ == "__main__":
+    fetch_and_save()
