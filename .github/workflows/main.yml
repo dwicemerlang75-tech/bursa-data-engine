@@ -1,33 +1,44 @@
+import yfinance as yf
+import pandas as pd
+import datetime
+import time
 
-name: Bursa 15Min Update
+# URL CSV dari Google Sheets hang
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1aoNh8FUQTmkFshV5qlmrUi2EeUNvla7pYROK_Wb6MgI/export?format=csv&gid=0"
 
-on:
-  schedule:
-    - cron: '*/15 1-9 * * 1-5'
-  workflow_dispatch:
+def fetch_and_save():
+    try:
+        # 1. Baca list dari Google Sheets
+        df_list = pd.read_csv(SHEET_URL)
+        
+        # Pastikan column TICKER wujud, kalau tak dia ambil column pertama
+        ticker_col = 'TICKER' if 'TICKER' in df_list.columns else df_list.columns[0]
+        tickers = df_list[ticker_col].dropna().unique().tolist()
+        
+        # Bersihkan whitespace kalau ada
+        tickers = [str(t).strip() for t in tickers if t]
+        
+        print(f"Memulakan tarikan data untuk {len(tickers)} kaunter...")
 
-jobs:
-  run-engine:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
+        # 2. Tarik data (pecah kepada batch kecil untuk elok kena ban)
+        data = yf.download(
+            tickers=tickers,
+            period="1d",
+            interval="15m",
+            group_by='ticker',
+            threads=True,
+            progress=True
+        )
 
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.9'
+        if not data.empty:
+            data.to_csv("bursa_live_data.csv")
+            print(f"Berjaya simpan bursa_live_data.csv pada: {datetime.datetime.now()}")
+        else:
+            print("Data kosong. Sila check list ticker dalam Google Sheets.")
+            
+    except Exception as e:
+        print(f"Error berlaku: {str(e)}")
+        exit(1) # Bagitahu GitHub ada error
 
-      - name: Install Dependencies
-        run: pip install yfinance pandas
-
-      - name: Execute Scraper
-        run: python update_data.py
-
-      - name: Push to Repo
-        run: |
-          git config --global user.name "BursaBot"
-          git config --global user.email "bot@github.com"
-          git add bursa_live_data.csv
-          git commit -m "Auto-update: $(date)" || exit 0
-          git push
+if __name__ == "__main__":
+    fetch_and_save()
