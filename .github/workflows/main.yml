@@ -1,36 +1,33 @@
-import yfinance as yf
-import pandas as pd
-import datetime
 
-# URL CSV dari Google Sheets hang
-SHEET_URL = "https://docs.google.com/spreadsheets/d/1aoNh8FUQTmkFshV5qlmrUi2EeUNvla7pYROK_Wb6MgI/export?format=csv&gid=0"
+name: Bursa 15Min Update
 
-def fetch_and_save():
-    try:
-        # 1. Baca list dari Google Sheets
-        df_list = pd.read_csv(SHEET_URL)
-        # Ambil column TICKER (huruf besar ikut Sheets hang)
-        tickers = df_list['TICKER'].dropna().unique().tolist()
-        
-        print(f"Memulakan tarikan data untuk {len(tickers)} kaunter...")
+on:
+  schedule:
+    - cron: '*/15 1-9 * * 1-5'
+  workflow_dispatch:
 
-        # 2. Tarik data batch
-        data = yf.download(
-            tickers=tickers,
-            period="1d",
-            interval="15m",
-            group_by='ticker',
-            threads=True,
-            progress=False
-        )
+jobs:
+  run-engine:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
 
-        if not data.empty:
-            # Simpan fail csv dalam repo
-            data.to_csv("bursa_live_data.csv")
-            print(f"Berjaya update pada: {datetime.datetime.now()}")
-            
-    except Exception as e:
-        print(f"Error: {e}")
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
 
-if __name__ == "__main__":
-    fetch_and_save()
+      - name: Install Dependencies
+        run: pip install yfinance pandas
+
+      - name: Execute Scraper
+        run: python update_data.py
+
+      - name: Push to Repo
+        run: |
+          git config --global user.name "BursaBot"
+          git config --global user.email "bot@github.com"
+          git add bursa_live_data.csv
+          git commit -m "Auto-update: $(date)" || exit 0
+          git push
